@@ -214,6 +214,7 @@ function addScan(itemId){
 /* STATE */
 let active = false;
 let sending = false;
+let userLocked = false;
 
 /* AUTO START */
 function checkAutoStart(){
@@ -259,6 +260,12 @@ function doClear(){
   userEl.value = "";
   poEl.value = "";
   qtyEl.value = 1;
+
+  // 🔓 unlock user
+  userLocked = false;
+  userEl.readOnly = false;
+  userEl.style.opacity = "1";
+
   stopScanner();
   showToast("Cleared");
 }
@@ -278,6 +285,14 @@ function confirmClearAnyway(){
   saveQueue();
   doClear();
 }
+
+/* PREVENT EDIT WHEN LOCKED */
+userEl.addEventListener("focus", () => {
+  if (userLocked) {
+    userEl.blur();
+    showToast("User locked. Press Clear to change.");
+  }
+});
 
 /* KEEP FOCUS */
 setInterval(() => {
@@ -303,6 +318,13 @@ function handleScan(text){
 
   sending = true;
   setTimeout(() => sending = false, 300);
+
+  // 🔒 lock user on first scan
+  if (!userLocked) {
+    userLocked = true;
+    userEl.readOnly = true;
+    userEl.style.opacity = "0.6";
+  }
 
   addScan(text);
   showToast("Scanned: " + text);
