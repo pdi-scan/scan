@@ -9,7 +9,7 @@
 <link rel="manifest" href="manifest.json">
 <meta name="theme-color" content="#111111">
 
-<!-- iOS PWA -->
+<!-- iOS -->
 <meta name="apple-mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-status-bar-style" content="black">
 <meta name="apple-mobile-web-app-title" content="Scanner">
@@ -107,7 +107,7 @@ input, button {
 </div>
 
 <div id="lastScans">
-  <b>Last 5 Scans</b>
+  <b>Last 5 Scans (Your Activity)</b>
   <div id="scanList"></div>
 </div>
 
@@ -172,24 +172,42 @@ function updateQueue(){
 }
 updateQueue();
 
-/* LAST SCANS */
-let lastScans = JSON.parse(localStorage.getItem("lastScans") || "[]");
+/* USER-SCOPED LAST SCANS */
+function getUserKey(){
+  return "lastScans_" + (userEl.value.trim().toLowerCase() || "anonymous");
+}
+
+function loadLastScans(){
+  return JSON.parse(localStorage.getItem(getUserKey()) || "[]");
+}
+
+function saveLastScans(scans){
+  localStorage.setItem(getUserKey(), JSON.stringify(scans));
+}
 
 function renderLastScans(){
+  const scans = loadLastScans();
   scanList.innerHTML = "";
-  lastScans.forEach(item => {
+
+  scans.forEach(entry => {
     const div = document.createElement("div");
     div.className = "scanItem";
-    div.innerText = "✔ " + item;
+    div.innerText = `✔ ${entry.itemId} (${entry.po})`;
     scanList.appendChild(div);
   });
 }
-renderLastScans();
 
 function addScan(itemId){
-  lastScans.unshift(itemId);
-  if (lastScans.length > 5) lastScans.pop();
-  localStorage.setItem("lastScans", JSON.stringify(lastScans));
+  let scans = loadLastScans();
+
+  scans.unshift({
+    itemId: itemId,
+    po: poEl.value || "NO PO"
+  });
+
+  if (scans.length > 5) scans.pop();
+
+  saveLastScans(scans);
   renderLastScans();
 }
 
@@ -205,13 +223,17 @@ function checkAutoStart(){
     stopScanner();
   }
 }
-userEl.oninput = poEl.oninput = checkAutoStart;
+userEl.oninput = poEl.oninput = () => {
+  checkAutoStart();
+  renderLastScans();
+};
 
 /* START */
 function startScanner(){
   active = true;
   scanInput.focus();
   flushQueue();
+  renderLastScans();
   setStatus("ready", "🟢 Ready to Scan");
 }
 
@@ -356,7 +378,10 @@ async function flushQueue(){
 
 /* AUTO SYNC */
 window.addEventListener("online", flushQueue);
-window.addEventListener("load", flushQueue);
+window.addEventListener("load", () => {
+  flushQueue();
+  renderLastScans();
+});
 </script>
 
 </body>
