@@ -176,33 +176,33 @@ async function handleScan(text){
 /* SEND TO API */
 async function send(itemId){
 
-  const scanId = crypto.randomUUID();
+  const scanId = (crypto.randomUUID && crypto.randomUUID()) 
+    || Date.now().toString();
+
+  const qty = qtyEl.value || 1;
+  const po = poEl.value || "";
+  const user = userEl.value || "";
 
   const url =
     API_URL +
     "?scanId=" + encodeURIComponent(scanId) +
     "&itemId=" + encodeURIComponent(itemId) +
-    "&qty=" + encodeURIComponent(qtyEl.value || 1) +
-    "&po=" + encodeURIComponent(poEl.value || "") +
-    "&user=" + encodeURIComponent(userEl.value || "");
+    "&qty=" + encodeURIComponent(qty) +
+    "&po=" + encodeURIComponent(po) +
+    "&user=" + encodeURIComponent(user);
+
+  console.log("FINAL URL:", url);
 
   try {
-    const r = await fetch(url, {
-      method: "GET",
-      cache: "no-store"
-    });
-
+    const r = await fetch(url, { cache: "no-store" });
     const text = await r.text();
-    const d = JSON.parse(text);
 
-    if(d.success){
-      showToast("✔ " + itemId);
-    } else {
-      showToast("⚠ Item not found");
-    }
+    console.log("RESPONSE:", text);
+    alert(text); // 🔥 force visibility
 
-  } catch(e){
-    showToast("❌ Network error");
+  } catch (e) {
+    console.error("FAILED:", e);
+    alert("NETWORK FAIL");
   }
 }
 </script>
