@@ -3,41 +3,52 @@
 <head>
 <meta charset="utf-8" />
 <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
-<title>Warehouse Scanner</title>
-
-<link rel="manifest" href="manifest.json">
-<meta name="theme-color" content="#111111">
-
-<meta name="apple-mobile-web-app-capable" content="yes">
-<meta name="apple-mobile-web-app-status-bar-style" content="black">
+<title>Scanner Debug</title>
 
 <style>
 body { margin:0; font-family:-apple-system; background:#111; color:white; text-align:center; }
 header { padding:12px; font-weight:800; background:#000; }
+
 input, button {
   width:90%; max-width:420px;
   padding:14px; margin:8px auto;
   border-radius:10px; border:none;
   font-size:16px; font-weight:700;
 }
+
 #scanInput { position:absolute; opacity:0; }
+
 #status { margin:10px auto; padding:10px; border-radius:12px; font-weight:800; }
 .status-ready { background:#16a34a; }
 .status-stopped { background:#dc2626; }
-.status-sync { background:#ca8a04; }
+
 #toast {
   position:fixed; bottom:30px; left:50%;
   transform:translateX(-50%);
   background:#111827; padding:12px;
-  border-radius:10px; opacity:0;
+  border-radius:10px;
+  opacity:0;
 }
 #toast.show { opacity:1; }
+
+#log {
+  max-width:420px;
+  margin:10px auto;
+  text-align:left;
+  background:#000;
+  padding:10px;
+  font-size:12px;
+  font-family:monospace;
+  height:200px;
+  overflow:auto;
+}
 </style>
 </head>
 
 <body>
 
-<header>📦 Scanner</header>
+<header>📦 Scanner (Debug Mode)</header>
+
 <div id="status" class="status-stopped">🔴 Stopped</div>
 
 <input id="user" placeholder="User">
@@ -45,17 +56,21 @@ input, button {
 <input id="qty" type="number" value="1">
 
 <button onclick="clearSession()">Clear</button>
+<button onclick="testAPI()">TEST API</button>
 
 <input id="scanInput" autocomplete="off">
 
 <div id="toast"></div>
+<div id="log"></div>
 
 <script>
 const API_URL = "https://script.google.com/macros/s/AKfycbxRapCp8opT14sx21CKx-K4clBTsDtgv28WY9boNGIruSe8fBKBFekH6sGXkfocp6wK/exec";
 
-/* REGISTER SW (SAFE) */
-if ("serviceWorker" in navigator) {
-  navigator.serviceWorker.register("sw.js");
+/* 🔥 HARD DISABLE SERVICE WORKERS */
+if ('serviceWorker' in navigator) {
+  navigator.serviceWorker.getRegistrations().then(regs => {
+    regs.forEach(r => r.unregister());
+  });
 }
 
 /* DOM */
@@ -64,11 +79,14 @@ const poEl = document.getElementById("po");
 const qtyEl = document.getElementById("qty");
 const scanInput = document.getElementById("scanInput");
 const statusEl = document.getElementById("status");
+const logEl = document.getElementById("log");
 
-/* STATE */
-let active = false;
-let sending = false;
-let userLocked = false;
+/* LOG */
+function log(msg){
+  console.log(msg);
+  logEl.innerHTML += msg + "<br>";
+  logEl.scrollTop = logEl.scrollHeight;
+}
 
 /* STATUS */
 function setStatus(type,text){
@@ -83,8 +101,12 @@ function showToast(msg){
   t.innerText=msg;
   t.classList.add("show");
   setTimeout(()=>t.classList.remove("show"),1500);
-  if(navigator.vibrate) navigator.vibrate(80);
 }
+
+/* STATE */
+let active=false;
+let sending=false;
+let userLocked=false;
 
 /* AUTO START */
 function checkAutoStart(){
@@ -96,14 +118,14 @@ userEl.oninput = poEl.oninput = checkAutoStart;
 
 /* START */
 function startScanner(){
-  active = true;
+  active=true;
   scanInput.focus();
   setStatus("ready","🟢 Ready");
 }
 
 /* STOP */
 function stopScanner(){
-  active = false;
+  active=false;
   scanInput.blur();
   setStatus("stopped","🔴 Stopped");
 }
@@ -169,7 +191,26 @@ async function handleScan(text){
   }
 }
 
-/* SEND (SAFE FETCH) */
+/* 🧪 TEST BUTTON */
+async function testAPI(){
+  const url = API_URL +
+    "?itemId=TEST123&qty=1&po=TEST&user=TEST";
+
+  log("TEST URL: " + url);
+
+  try{
+    const r = await fetch(url, { cache: "no-store" });
+    log("STATUS: " + r.status);
+
+    const text = await r.text();
+    log("RESPONSE: " + text);
+
+  } catch(e){
+    log("TEST FAILED: " + e);
+  }
+}
+
+/* SEND */
 async function send(itemId){
 
   const url =
@@ -179,27 +220,35 @@ async function send(itemId){
     "&po=" + encodeURIComponent(poEl.value || "") +
     "&user=" + encodeURIComponent(userEl.value || "");
 
+  log("SEND URL: " + url);
+
   try {
     const r = await fetch(url, {
       method: "GET",
-      redirect: "follow",
       cache: "no-store"
     });
 
-    const text = await r.text();
-    console.log("API:", text);
+    log("STATUS: " + r.status);
 
-    const d = JSON.parse(text);
+    const text = await r.text();
+    log("RAW: " + text);
+
+    let d;
+    try {
+      d = JSON.parse(text);
+    } catch(e){
+      log("❌ NOT JSON");
+      return;
+    }
 
     if(d.success){
       showToast("✔ " + itemId);
     } else {
-      throw new Error("API error");
+      log("❌ API ERROR");
     }
 
   } catch(e){
-    console.error("SEND FAILED:", e);
-    showToast("❌ Failed");
+    log("❌ FETCH FAILED: " + e);
   }
 }
 </script>
