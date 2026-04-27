@@ -5,11 +5,9 @@
 <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
 <title>Warehouse Scanner</title>
 
-<!-- PWA -->
 <link rel="manifest" href="manifest.json">
 <meta name="theme-color" content="#111111">
 
-<!-- iOS -->
 <meta name="apple-mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-status-bar-style" content="black">
 <meta name="apple-mobile-web-app-title" content="Scanner">
@@ -28,13 +26,11 @@ input, button {
 
 #scanInput { position:absolute; opacity:0; }
 
-/* STATUS */
 #status { margin:10px auto; padding:10px 14px; border-radius:12px; font-weight:800; width:fit-content; }
-.status-ready   { background:#16a34a; }
+.status-ready { background:#16a34a; }
 .status-stopped { background:#dc2626; }
-.status-sync    { background:#ca8a04; }
+.status-sync { background:#ca8a04; }
 
-/* TOAST */
 #toast {
   position:fixed; bottom:30px; left:50%;
   transform:translateX(-50%);
@@ -44,7 +40,6 @@ input, button {
 }
 #toast.show { opacity:1; }
 
-/* HUD */
 #hud {
   position:fixed; top:10px; right:10px;
   background:#111827; padding:8px 12px;
@@ -56,7 +51,6 @@ input, button {
   background:#2563eb; color:white;
 }
 
-/* MODAL */
 #modal {
   position:fixed; inset:0;
   background:rgba(0,0,0,0.6);
@@ -69,7 +63,6 @@ input, button {
 }
 .modalBtns button { width:100%; margin-top:10px; }
 
-/* LAST SCANS */
 #lastScans {
   max-width:420px;
   margin:12px auto;
@@ -113,12 +106,10 @@ input, button {
 
 <div id="toast"></div>
 
-<!-- MODAL -->
 <div id="modal">
   <div id="modalCard">
     <div><b>Pending scans detected</b></div>
     <div id="modalText"></div>
-
     <div class="modalBtns">
       <button onclick="confirmSyncThenClear()">Sync First</button>
       <button onclick="confirmClearAnyway()">Clear Anyway</button>
@@ -130,292 +121,206 @@ input, button {
 <script>
 const API_URL = "https://script.google.com/macros/s/AKfycbxRapCp8opT14sx21CKx-K4clBTsDtgv28WY9boNGIruSe8fBKBFekH6sGXkfocp6wK/exec";
 
-/* SERVICE WORKER */
-if ("serviceWorker" in navigator) {
-  navigator.serviceWorker.register("sw.js");
-}
+if ("serviceWorker" in navigator) navigator.serviceWorker.register("sw.js");
 
-/* DOM */
 const userEl = document.getElementById("user");
-const poEl   = document.getElementById("po");
-const qtyEl  = document.getElementById("qty");
+const poEl = document.getElementById("po");
+const qtyEl = document.getElementById("qty");
 const scanInput = document.getElementById("scanInput");
 const statusEl = document.getElementById("status");
 const scanList = document.getElementById("scanList");
 
-/* STATUS */
-function setStatus(type, text){
-  statusEl.className = "";
-  statusEl.classList.add("status-" + type);
-  statusEl.innerText = text;
+function setStatus(type,text){
+  statusEl.className="";
+  statusEl.classList.add("status-"+type);
+  statusEl.innerText=text;
 }
 
-/* TOAST */
 function showToast(msg){
-  const t = document.getElementById("toast");
-  t.innerText = msg;
+  const t=document.getElementById("toast");
+  t.innerText=msg;
   t.classList.add("show");
-  setTimeout(() => t.classList.remove("show"), 1500);
-  if (navigator.vibrate) navigator.vibrate(80);
+  setTimeout(()=>t.classList.remove("show"),1500);
+  if(navigator.vibrate) navigator.vibrate(80);
 }
 
-/* QUEUE */
-let queue = JSON.parse(localStorage.getItem("scanQueue") || "[]");
-
-function saveQueue(){
-  localStorage.setItem("scanQueue", JSON.stringify(queue));
-  updateQueue();
-}
-
-function updateQueue(){
-  document.getElementById("queueCount").innerText = queue.length;
-}
+let queue=JSON.parse(localStorage.getItem("scanQueue")||"[]");
+function saveQueue(){localStorage.setItem("scanQueue",JSON.stringify(queue));updateQueue();}
+function updateQueue(){document.getElementById("queueCount").innerText=queue.length;}
 updateQueue();
 
-/* USER-SCOPED LAST SCANS */
-function getUserKey(){
-  return "lastScans_" + (userEl.value.trim().toLowerCase() || "anonymous");
-}
-
-function loadLastScans(){
-  return JSON.parse(localStorage.getItem(getUserKey()) || "[]");
-}
-
-function saveLastScans(scans){
-  localStorage.setItem(getUserKey(), JSON.stringify(scans));
-}
+/* USER SCOPED */
+function getUserKey(){return "lastScans_"+(userEl.value.trim().toLowerCase()||"anon");}
+function loadLastScans(){return JSON.parse(localStorage.getItem(getUserKey())||"[]");}
+function saveLastScans(s){localStorage.setItem(getUserKey(),JSON.stringify(s));}
 
 function renderLastScans(){
-  const scans = loadLastScans();
-  scanList.innerHTML = "";
-
-  scans.forEach(entry => {
-    const div = document.createElement("div");
-    div.className = "scanItem";
-    div.innerText = `✔ ${entry.itemId} (${entry.po})`;
-    scanList.appendChild(div);
+  const scans=loadLastScans();
+  scanList.innerHTML="";
+  scans.forEach(e=>{
+    const d=document.createElement("div");
+    d.className="scanItem";
+    d.innerText=`✔ ${e.itemId} (${e.po})`;
+    scanList.appendChild(d);
   });
 }
 
 function addScan(itemId){
-  let scans = loadLastScans();
-
-  scans.unshift({
-    itemId: itemId,
-    po: poEl.value || "NO PO"
-  });
-
-  if (scans.length > 5) scans.pop();
-
+  let scans=loadLastScans();
+  scans.unshift({itemId,po:poEl.value||"NO PO"});
+  if(scans.length>5) scans.pop();
   saveLastScans(scans);
   renderLastScans();
 }
 
-/* STATE */
-let active = false;
-let sending = false;
-let userLocked = false;
+let active=false;
+let sending=false;
+let userLocked=false;
 
-/* AUTO START */
 function checkAutoStart(){
-  if (userEl.value.trim() && poEl.value.trim()) {
-    if (!active) startScanner();
-  } else {
-    stopScanner();
-  }
+  if(userEl.value.trim()&&poEl.value.trim()){
+    if(!active) startScanner();
+  } else stopScanner();
 }
-userEl.oninput = poEl.oninput = () => {
-  checkAutoStart();
-  renderLastScans();
-};
 
-/* START */
+userEl.oninput=poEl.oninput=()=>{checkAutoStart();renderLastScans();};
+
 function startScanner(){
-  active = true;
+  active=true;
   scanInput.focus();
   flushQueue();
   renderLastScans();
-  setStatus("ready", "🟢 Ready to Scan");
+  setStatus("ready","🟢 Ready to Scan");
 }
 
-/* STOP */
 function stopScanner(){
-  active = false;
+  active=false;
   scanInput.blur();
-  setStatus("stopped", "🔴 Stopped");
+  setStatus("stopped","🔴 Stopped");
 }
 
-/* CLEAR */
 function clearSession(){
-  if (queue.length === 0) {
-    doClear();
-  } else {
-    document.getElementById("modalText").innerText =
-      queue.length + " scans have not synced.";
-    document.getElementById("modal").style.display = "flex";
+  if(queue.length===0) doClear();
+  else{
+    document.getElementById("modalText").innerText=queue.length+" scans not synced";
+    document.getElementById("modal").style.display="flex";
   }
 }
 
 function doClear(){
-  userEl.value = "";
-  poEl.value = "";
-  qtyEl.value = 1;
-
-  // 🔓 unlock user
-  userLocked = false;
-  userEl.readOnly = false;
-  userEl.style.opacity = "1";
-
+  userEl.value="";
+  poEl.value="";
+  qtyEl.value=1;
+  userLocked=false;
+  userEl.readOnly=false;
+  userEl.style.opacity="1";
   stopScanner();
   showToast("Cleared");
 }
 
-/* MODAL */
-function closeModal(){ document.getElementById("modal").style.display = "none"; }
+function closeModal(){document.getElementById("modal").style.display="none";}
+async function confirmSyncThenClear(){closeModal();await flushQueue();doClear();}
+function confirmClearAnyway(){closeModal();queue=[];saveQueue();doClear();}
 
-async function confirmSyncThenClear(){
-  closeModal();
-  await flushQueue();
-  doClear();
-}
+userEl.addEventListener("focus",()=>{
+  if(userLocked){userEl.blur();showToast("User locked");}
+});
 
-function confirmClearAnyway(){
-  closeModal();
-  queue = [];
-  saveQueue();
-  doClear();
-}
+setInterval(()=>{if(active&&document.activeElement!==scanInput)scanInput.focus();},500);
 
-/* PREVENT EDIT WHEN LOCKED */
-userEl.addEventListener("focus", () => {
-  if (userLocked) {
-    userEl.blur();
-    showToast("User locked. Press Clear to change.");
+scanInput.addEventListener("keydown",(e)=>{
+  if(!active) return;
+  if(e.key==="Enter"){
+    const v=scanInput.value.trim();
+    scanInput.value="";
+    if(v) handleScan(v);
   }
 });
 
-/* KEEP FOCUS */
-setInterval(() => {
-  if (active && document.activeElement !== scanInput) {
-    scanInput.focus();
-  }
-}, 500);
-
-/* SCAN */
-scanInput.addEventListener("keydown", (e) => {
-  if (!active) return;
-
-  if (e.key === "Enter") {
-    const value = scanInput.value.trim();
-    scanInput.value = "";
-    if (value) handleScan(value);
-  }
-});
-
-/* HANDLE */
 function handleScan(text){
-  if (sending) return;
+  if(sending) return;
+  sending=true;
+  setTimeout(()=>sending=false,300);
 
-  sending = true;
-  setTimeout(() => sending = false, 300);
-
-  // 🔒 lock user on first scan
-  if (!userLocked) {
-    userLocked = true;
-    userEl.readOnly = true;
-    userEl.style.opacity = "0.6";
+  if(!userLocked){
+    userLocked=true;
+    userEl.readOnly=true;
+    userEl.style.opacity="0.6";
   }
 
   addScan(text);
-  showToast("Scanned: " + text);
+  showToast("Scanned: "+text);
   send(text);
 }
 
-/* SEND */
 async function send(itemId){
-  const payload = {
-    scanId: crypto.randomUUID(),
+  const payload={
+    scanId:crypto.randomUUID(),
     itemId,
-    qty: qtyEl.value || 1,
-    po: poEl.value || "",
-    user: userEl.value || ""
+    qty:qtyEl.value||1,
+    po:poEl.value||"",
+    user:userEl.value||""
   };
 
-  const url =
-    API_URL +
-    "?scanId=" + encodeURIComponent(payload.scanId) +
-    "&itemId=" + encodeURIComponent(payload.itemId) +
-    "&qty=" + encodeURIComponent(payload.qty) +
-    "&po=" + encodeURIComponent(payload.po) +
-    "&user=" + encodeURIComponent(payload.user);
+  const url=
+    API_URL+
+    "?scanId="+encodeURIComponent(payload.scanId)+
+    "&itemId="+encodeURIComponent(payload.itemId)+
+    "&qty="+encodeURIComponent(payload.qty)+
+    "&po="+encodeURIComponent(payload.po)+
+    "&user="+encodeURIComponent(payload.user);
 
-  try {
-    const r = await fetch(url);
+  try{
+    const r=await fetch(url);
+    const text=await r.text();
+    console.log("API:",text);
+    const d=JSON.parse(text);
 
-    const text = await r.text();
+    if(d.success){
+      showToast("✔ "+itemId);
+    }else throw new Error();
 
-    // 🔍 DEBUG (optional but recommended)
-    console.log("API response:", text);
-
-    const d = JSON.parse(text);
-
-    if (d.success) {
-      showToast("✔ " + itemId);
-    } else {
-      console.error("API error:", d);
-      throw new Error();
-    }
-
-  } catch(e){
-    console.error("SEND FAILED:", e);
-
+  }catch(e){
+    console.error("FAILED:",e);
     queue.push(payload);
     saveQueue();
     showToast("Saved offline");
   }
 }
 
-/* SYNC */
 async function flushQueue(){
+  if(!navigator.onLine||queue.length===0) return;
 
-  if (!navigator.onLine || queue.length === 0) return;
+  setStatus("sync","🟡 Syncing...");
+  let remaining=[];
 
-  setStatus("sync", "🟡 Syncing...");
+  for(const item of queue){
+    try{
+      const url=
+        API_URL+
+        "?scanId="+encodeURIComponent(item.scanId)+
+        "&itemId="+encodeURIComponent(item.itemId)+
+        "&qty="+encodeURIComponent(item.qty)+
+        "&po="+encodeURIComponent(item.po)+
+        "&user="+encodeURIComponent(item.user);
 
-  let remaining = [];
+      const r=await fetch(url);
+      const d=JSON.parse(await r.text());
+      if(!d.success) throw new Error();
 
-  for (const item of queue){
-    try {
-      const r = await fetch(
-        API_URL +
-        "?scanId=" + item.scanId +
-        "&itemId=" + item.itemId +
-        "&qty=" + item.qty +
-        "&po=" + item.po +
-        "&user=" + item.user
-      );
-
-      const d = JSON.parse(await r.text());
-      if (!d.success) throw new Error();
-
-    } catch(e){
+    }catch(e){
       remaining.push(item);
     }
   }
 
-  queue = remaining;
+  queue=remaining;
   saveQueue();
-
-  setStatus("ready", "🟢 Ready to Scan");
-  showToast(queue.length ? "Pending remain" : "Synced");
+  setStatus("ready","🟢 Ready to Scan");
+  showToast(queue.length?"Pending remain":"Synced");
 }
 
-/* AUTO SYNC */
-window.addEventListener("online", flushQueue);
-window.addEventListener("load", () => {
-  flushQueue();
-  renderLastScans();
-});
+window.addEventListener("online",flushQueue);
+window.addEventListener("load",()=>{flushQueue();renderLastScans();});
 </script>
 
 </body>
