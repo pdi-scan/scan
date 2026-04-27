@@ -341,22 +341,34 @@ async function send(itemId){
     user: userEl.value || ""
   };
 
-  try {
-    const r = await fetch(
-      API_URL +
-      "?scanId=" + payload.scanId +
-      "&itemId=" + itemId +
-      "&qty=" + payload.qty +
-      "&po=" + payload.po +
-      "&user=" + payload.user
-    );
+  const url =
+    API_URL +
+    "?scanId=" + encodeURIComponent(payload.scanId) +
+    "&itemId=" + encodeURIComponent(payload.itemId) +
+    "&qty=" + encodeURIComponent(payload.qty) +
+    "&po=" + encodeURIComponent(payload.po) +
+    "&user=" + encodeURIComponent(payload.user);
 
-    const d = JSON.parse(await r.text());
+  try {
+    const r = await fetch(url);
+
+    const text = await r.text();
+
+    // 🔍 DEBUG (optional but recommended)
+    console.log("API response:", text);
+
+    const d = JSON.parse(text);
+
     if (d.success) {
       showToast("✔ " + itemId);
-    } else throw new Error();
+    } else {
+      console.error("API error:", d);
+      throw new Error();
+    }
 
   } catch(e){
+    console.error("SEND FAILED:", e);
+
     queue.push(payload);
     saveQueue();
     showToast("Saved offline");
