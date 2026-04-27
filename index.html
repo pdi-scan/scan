@@ -39,7 +39,6 @@ input, button {
   opacity:0;
   transition:0.2s;
 }
-
 #toast.show { opacity:1; }
 </style>
 </head>
@@ -88,6 +87,21 @@ function showToast(msg){
   t.innerText = msg;
   t.classList.add("show");
   setTimeout(() => t.classList.remove("show"), 1500);
+}
+
+/* HYBRID SCAN ID (IMPORTANT FIX) */
+function generateScanId() {
+  // primary: modern UUID
+  if (crypto.randomUUID) {
+    return crypto.randomUUID();
+  }
+
+  // fallback: timestamp + randomness
+  return (
+    Date.now().toString() +
+    "-" +
+    Math.random().toString(16).slice(2)
+  );
 }
 
 /* AUTO START */
@@ -173,36 +187,36 @@ async function handleScan(text){
   }
 }
 
-/* SEND TO API */
+/* SEND */
 async function send(itemId){
 
-  const scanId = (crypto.randomUUID && crypto.randomUUID()) 
-    || Date.now().toString();
-
-  const qty = qtyEl.value || 1;
-  const po = poEl.value || "";
-  const user = userEl.value || "";
+  const scanId = generateScanId(); // ✅ HYBRID STABLE ID
 
   const url =
     API_URL +
     "?scanId=" + encodeURIComponent(scanId) +
     "&itemId=" + encodeURIComponent(itemId) +
-    "&qty=" + encodeURIComponent(qty) +
-    "&po=" + encodeURIComponent(po) +
-    "&user=" + encodeURIComponent(user);
-
-  console.log("FINAL URL:", url);
+    "&qty=" + encodeURIComponent(qtyEl.value || 1) +
+    "&po=" + encodeURIComponent(poEl.value || "") +
+    "&user=" + encodeURIComponent(userEl.value || "");
 
   try {
-    const r = await fetch(url, { cache: "no-store" });
+    const r = await fetch(url, {
+      method: "GET",
+      cache: "no-store"
+    });
+
     const text = await r.text();
+    const d = JSON.parse(text);
 
-    console.log("RESPONSE:", text);
-    alert(text); // 🔥 force visibility
+    if(d.success){
+      showToast("✔ " + itemId);
+    } else {
+      showToast("⚠ Item not found");
+    }
 
-  } catch (e) {
-    console.error("FAILED:", e);
-    alert("NETWORK FAIL");
+  } catch(e){
+    showToast("❌ Network error");
   }
 }
 </script>
