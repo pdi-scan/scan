@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8" />
 <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
-<title>Scanner Debug</title>
+<title>Scanner</title>
 
 <style>
 body { margin:0; font-family:-apple-system; background:#111; color:white; text-align:center; }
@@ -47,7 +47,7 @@ input, button {
 
 <body>
 
-<header>📦 Scanner (Debug Mode)</header>
+<header>📦 Scanner</header>
 
 <div id="status" class="status-stopped">🔴 Stopped</div>
 
@@ -66,7 +66,7 @@ input, button {
 <script>
 const API_URL = "https://script.google.com/macros/s/AKfycbxRapCp8opT14sx21CKx-K4clBTsDtgv28WY9boNGIruSe8fBKBFekH6sGXkfocp6wK/exec";
 
-/* 🔥 HARD DISABLE SERVICE WORKERS */
+/* 🔥 HARD DISABLE SERVICE WORKER */
 if ('serviceWorker' in navigator) {
   navigator.serviceWorker.getRegistrations().then(regs => {
     regs.forEach(r => r.unregister());
@@ -191,17 +191,20 @@ async function handleScan(text){
   }
 }
 
-/* 🧪 TEST BUTTON */
+/* TEST */
 async function testAPI(){
+
   const url = API_URL +
-    "?itemId=TEST123&qty=1&po=TEST&user=TEST";
+    "?scanId=TEST123" +
+    "&itemId=TEST123" +
+    "&qty=1" +
+    "&po=TEST" +
+    "&user=TEST";
 
   log("TEST URL: " + url);
 
   try{
     const r = await fetch(url, { cache: "no-store" });
-    log("STATUS: " + r.status);
-
     const text = await r.text();
     log("RESPONSE: " + text);
 
@@ -213,20 +216,26 @@ async function testAPI(){
 /* SEND */
 async function send(itemId){
 
+  const payload = {
+    scanId: crypto.randomUUID(),
+    itemId,
+    qty: qtyEl.value || 1,
+    po: poEl.value || "",
+    user: userEl.value || ""
+  };
+
   const url =
     API_URL +
-    "?itemId=" + encodeURIComponent(itemId) +
-    "&qty=" + encodeURIComponent(qtyEl.value || 1) +
-    "&po=" + encodeURIComponent(poEl.value || "") +
-    "&user=" + encodeURIComponent(userEl.value || "");
+    "?scanId=" + encodeURIComponent(payload.scanId) +
+    "&itemId=" + encodeURIComponent(payload.itemId) +
+    "&qty=" + encodeURIComponent(payload.qty) +
+    "&po=" + encodeURIComponent(payload.po) +
+    "&user=" + encodeURIComponent(payload.user);
 
   log("SEND URL: " + url);
 
   try {
-    const r = await fetch(url, {
-      method: "GET",
-      cache: "no-store"
-    });
+    const r = await fetch(url, { cache: "no-store" });
 
     log("STATUS: " + r.status);
 
@@ -244,7 +253,7 @@ async function send(itemId){
     if(d.success){
       showToast("✔ " + itemId);
     } else {
-      log("❌ API ERROR");
+      log("❌ API ERROR: " + text);
     }
 
   } catch(e){
