@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8" />
 <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
-<title>Scanner</title>
+<title>Warehouse Scanner</title>
 
 <style>
 body { margin:0; font-family:-apple-system; background:#111; color:white; text-align:center; }
@@ -18,60 +18,55 @@ input, button {
 
 #scanInput { position:absolute; opacity:0; }
 
-#status { margin:10px auto; padding:10px; border-radius:12px; font-weight:800; }
+#status {
+  margin:10px auto;
+  padding:10px;
+  border-radius:12px;
+  font-weight:800;
+}
+
 .status-ready { background:#16a34a; }
 .status-stopped { background:#dc2626; }
 
 #toast {
-  position:fixed; bottom:30px; left:50%;
+  position:fixed;
+  bottom:30px;
+  left:50%;
   transform:translateX(-50%);
-  background:#111827; padding:12px;
+  background:#111827;
+  padding:12px;
   border-radius:10px;
   opacity:0;
+  transition:0.2s;
 }
-#toast.show { opacity:1; }
 
-#log {
-  max-width:420px;
-  margin:10px auto;
-  text-align:left;
-  background:#000;
-  padding:10px;
-  font-size:12px;
-  font-family:monospace;
-  height:200px;
-  overflow:auto;
-}
+#toast.show { opacity:1; }
 </style>
 </head>
 
 <body>
 
-<header>📦 Scanner</header>
+<header>📦 Warehouse Scanner</header>
 
 <div id="status" class="status-stopped">🔴 Stopped</div>
 
 <input id="user" placeholder="User">
 <input id="po" placeholder="PO">
-<input id="qty" type="number" value="1">
+<input id="qty" type="number" value="1" min="1">
 
 <button onclick="clearSession()">Clear</button>
-<button onclick="testAPI()">TEST API</button>
 
 <input id="scanInput" autocomplete="off">
 
 <div id="toast"></div>
-<div id="log"></div>
 
 <script>
 const API_URL = "https://script.google.com/macros/s/AKfycbxRapCp8opT14sx21CKx-K4clBTsDtgv28WY9boNGIruSe8fBKBFekH6sGXkfocp6wK/exec";
 
-/* 🔥 HARD DISABLE SERVICE WORKER */
-if ('serviceWorker' in navigator) {
-  navigator.serviceWorker.getRegistrations().then(regs => {
-    regs.forEach(r => r.unregister());
-  });
-}
+/* STATE */
+let active = false;
+let sending = false;
+let userLocked = false;
 
 /* DOM */
 const userEl = document.getElementById("user");
@@ -79,34 +74,21 @@ const poEl = document.getElementById("po");
 const qtyEl = document.getElementById("qty");
 const scanInput = document.getElementById("scanInput");
 const statusEl = document.getElementById("status");
-const logEl = document.getElementById("log");
-
-/* LOG */
-function log(msg){
-  console.log(msg);
-  logEl.innerHTML += msg + "<br>";
-  logEl.scrollTop = logEl.scrollHeight;
-}
 
 /* STATUS */
-function setStatus(type,text){
-  statusEl.className="";
-  statusEl.classList.add("status-"+type);
-  statusEl.innerText=text;
+function setStatus(type, text){
+  statusEl.className = "";
+  statusEl.classList.add("status-" + type);
+  statusEl.innerText = text;
 }
 
 /* TOAST */
 function showToast(msg){
-  const t=document.getElementById("toast");
-  t.innerText=msg;
+  const t = document.getElementById("toast");
+  t.innerText = msg;
   t.classList.add("show");
-  setTimeout(()=>t.classList.remove("show"),1500);
+  setTimeout(() => t.classList.remove("show"), 1500);
 }
-
-/* STATE */
-let active=false;
-let sending=false;
-let userLocked=false;
 
 /* AUTO START */
 function checkAutoStart(){
@@ -118,34 +100,34 @@ userEl.oninput = poEl.oninput = checkAutoStart;
 
 /* START */
 function startScanner(){
-  active=true;
+  active = true;
   scanInput.focus();
-  setStatus("ready","🟢 Ready");
+  setStatus("ready", "🟢 Ready");
 }
 
 /* STOP */
 function stopScanner(){
-  active=false;
+  active = false;
   scanInput.blur();
-  setStatus("stopped","🔴 Stopped");
+  setStatus("stopped", "🔴 Stopped");
 }
 
 /* CLEAR */
 function clearSession(){
-  userEl.value="";
-  poEl.value="";
-  qtyEl.value=1;
+  userEl.value = "";
+  poEl.value = "";
+  qtyEl.value = 1;
 
-  userLocked=false;
-  userEl.readOnly=false;
-  userEl.style.opacity="1";
+  userLocked = false;
+  userEl.readOnly = false;
+  userEl.style.opacity = "1";
 
   stopScanner();
   showToast("Cleared");
 }
 
-/* LOCK USER */
-userEl.addEventListener("focus",()=>{
+/* LOCK USER AFTER FIRST SCAN */
+userEl.addEventListener("focus", () => {
   if(userLocked){
     userEl.blur();
     showToast("User locked");
@@ -153,24 +135,24 @@ userEl.addEventListener("focus",()=>{
 });
 
 /* KEEP FOCUS */
-setInterval(()=>{
-  if(active && document.activeElement!==scanInput){
+setInterval(() => {
+  if(active && document.activeElement !== scanInput){
     scanInput.focus();
   }
-},500);
+}, 500);
 
-/* SCAN */
-scanInput.addEventListener("keydown",(e)=>{
+/* SCAN INPUT */
+scanInput.addEventListener("keydown", (e) => {
   if(!active) return;
 
-  if(e.key==="Enter"){
-    const value=scanInput.value.trim();
-    scanInput.value="";
+  if(e.key === "Enter"){
+    const value = scanInput.value.trim();
+    scanInput.value = "";
     if(value) handleScan(value);
   }
 });
 
-/* HANDLE */
+/* HANDLE SCAN */
 async function handleScan(text){
   if(sending) return;
   sending = true;
@@ -178,12 +160,12 @@ async function handleScan(text){
   try {
 
     if(!userLocked){
-      userLocked=true;
-      userEl.readOnly=true;
-      userEl.style.opacity="0.6";
+      userLocked = true;
+      userEl.readOnly = true;
+      userEl.style.opacity = "0.6";
     }
 
-    showToast("Scanned: "+text);
+    showToast("Scanned: " + text);
     await send(text);
 
   } finally {
@@ -191,73 +173,36 @@ async function handleScan(text){
   }
 }
 
-/* TEST */
-async function testAPI(){
-
-  const url = API_URL +
-    "?scanId=TEST123" +
-    "&itemId=TEST123" +
-    "&qty=1" +
-    "&po=TEST" +
-    "&user=TEST";
-
-  log("TEST URL: " + url);
-
-  try{
-    const r = await fetch(url, { cache: "no-store" });
-    const text = await r.text();
-    log("RESPONSE: " + text);
-
-  } catch(e){
-    log("TEST FAILED: " + e);
-  }
-}
-
-/* SEND */
+/* SEND TO API */
 async function send(itemId){
 
-  const payload = {
-    scanId: crypto.randomUUID(),
-    itemId,
-    qty: qtyEl.value || 1,
-    po: poEl.value || "",
-    user: userEl.value || ""
-  };
+  const scanId = crypto.randomUUID();
 
   const url =
     API_URL +
-    "?scanId=" + encodeURIComponent(payload.scanId) +
-    "&itemId=" + encodeURIComponent(payload.itemId) +
-    "&qty=" + encodeURIComponent(payload.qty) +
-    "&po=" + encodeURIComponent(payload.po) +
-    "&user=" + encodeURIComponent(payload.user);
-
-  log("SEND URL: " + url);
+    "?scanId=" + encodeURIComponent(scanId) +
+    "&itemId=" + encodeURIComponent(itemId) +
+    "&qty=" + encodeURIComponent(qtyEl.value || 1) +
+    "&po=" + encodeURIComponent(poEl.value || "") +
+    "&user=" + encodeURIComponent(userEl.value || "");
 
   try {
-    const r = await fetch(url, { cache: "no-store" });
-
-    log("STATUS: " + r.status);
+    const r = await fetch(url, {
+      method: "GET",
+      cache: "no-store"
+    });
 
     const text = await r.text();
-    log("RAW: " + text);
-
-    let d;
-    try {
-      d = JSON.parse(text);
-    } catch(e){
-      log("❌ NOT JSON");
-      return;
-    }
+    const d = JSON.parse(text);
 
     if(d.success){
       showToast("✔ " + itemId);
     } else {
-      log("❌ API ERROR: " + text);
+      showToast("⚠ Item not found");
     }
 
   } catch(e){
-    log("❌ FETCH FAILED: " + e);
+    showToast("❌ Network error");
   }
 }
 </script>
