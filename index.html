@@ -6,40 +6,79 @@
 <title>Warehouse Scanner</title>
 
 <style>
-body { margin:0; font-family:-apple-system; background:#111; color:white; text-align:center; }
-header { padding:12px; font-weight:800; background:#000; }
-
-input, button {
-  width:90%; max-width:420px;
-  padding:14px; margin:8px auto;
-  border-radius:10px; border:none;
-  font-size:16px; font-weight:700;
+body{
+  margin:0;
+  font-family:-apple-system,BlinkMacSystemFont,sans-serif;
+  background:#111;
+  color:white;
+  text-align:center;
 }
 
-#scanInput { position:absolute; opacity:0; }
+header{
+  padding:14px;
+  font-weight:800;
+  font-size:20px;
+  background:#000;
+}
 
-#status {
+input, button{
+  width:90%;
+  max-width:420px;
+  padding:14px;
+  margin:8px auto;
+  border:none;
+  border-radius:12px;
+  font-size:16px;
+  font-weight:700;
+  box-sizing:border-box;
+}
+
+button{
+  background:#2563eb;
+  color:white;
+}
+
+#scanInput{
+  position:absolute;
+  opacity:0;
+  pointer-events:none;
+}
+
+#status{
   margin:10px auto;
-  padding:10px;
+  padding:10px 14px;
   border-radius:12px;
   font-weight:800;
+  width:fit-content;
 }
 
-.status-ready { background:#16a34a; }
-.status-stopped { background:#dc2626; }
+.status-ready{
+  background:#16a34a;
+}
 
-#toast {
+.status-stopped{
+  background:#dc2626;
+}
+
+#toast{
   position:fixed;
   bottom:30px;
   left:50%;
   transform:translateX(-50%);
-  background:#111827;
-  padding:12px;
-  border-radius:10px;
+  background:rgba(17,24,39,0.96);
+  color:white;
+  padding:12px 16px;
+  border-radius:12px;
+  font-weight:700;
+  z-index:999999;
   opacity:0;
   transition:0.2s;
+  pointer-events:none;
 }
-#toast.show { opacity:1; }
+
+#toast.show{
+  opacity:1;
+}
 </style>
 </head>
 
@@ -47,14 +86,21 @@ input, button {
 
 <header>📦 Warehouse Scanner</header>
 
-<div id="status" class="status-stopped">🔴 Stopped</div>
+<div id="status" class="status-stopped">
+  🔴 Stopped
+</div>
 
 <input id="user" placeholder="User">
+
 <input id="po" placeholder="PO">
-<input id="qty" type="number" value="1" min="1">
 
-<button onclick="clearSession()">Clear</button>
+<input id="qty" type="number" min="1" value="1">
 
+<button onclick="clearSession()">
+  Clear
+</button>
+
+<!-- hidden scanner target -->
 <input id="scanInput" autocomplete="off">
 
 <div id="toast"></div>
@@ -65,7 +111,7 @@ const API_URL = "https://script.google.com/macros/s/AKfycbxRapCp8opT14sx21CKx-K4
 /* STATE */
 let active = false;
 let sending = false;
-let userLocked = false;
+let sessionLocked = false;
 
 /* DOM */
 const userEl = document.getElementById("user");
@@ -76,27 +122,42 @@ const statusEl = document.getElementById("status");
 
 /* STATUS */
 function setStatus(type, text){
+
   statusEl.className = "";
+
   statusEl.classList.add("status-" + type);
+
   statusEl.innerText = text;
 }
 
 /* TOAST */
 function showToast(msg){
+
+  // prevent native alert fallback
+  window.alert = () => {};
+
   const t = document.getElementById("toast");
+
   t.innerText = msg;
+
   t.classList.add("show");
-  setTimeout(() => t.classList.remove("show"), 1500);
+
+  setTimeout(() => {
+    t.classList.remove("show");
+  }, 1500);
+
+  if(navigator.vibrate){
+    navigator.vibrate(60);
+  }
 }
 
-/* HYBRID SCAN ID (IMPORTANT FIX) */
-function generateScanId() {
-  // primary: modern UUID
+/* HYBRID STABLE ID */
+function generateScanId(){
+
   if (crypto.randomUUID) {
     return crypto.randomUUID();
   }
 
-  // fallback: timestamp + randomness
   return (
     Date.now().toString() +
     "-" +
@@ -104,93 +165,163 @@ function generateScanId() {
   );
 }
 
-/* AUTO START */
-function checkAutoStart(){
-  if(userEl.value.trim() && poEl.value.trim()){
-    if(!active) startScanner();
-  } else stopScanner();
-}
-userEl.oninput = poEl.oninput = checkAutoStart;
-
-/* START */
+/* START SCANNER */
 function startScanner(){
+
   active = true;
+
+  sessionLocked = true;
+
+  userEl.readOnly = true;
+  poEl.readOnly = true;
+
+  userEl.style.opacity = "0.6";
+  poEl.style.opacity = "0.6";
+
   scanInput.focus();
+
   setStatus("ready", "🟢 Ready");
+
+  showToast("Scanner Active");
 }
 
 /* STOP */
 function stopScanner(){
+
   active = false;
+
   scanInput.blur();
+
   setStatus("stopped", "🔴 Stopped");
 }
 
 /* CLEAR */
 function clearSession(){
+
   userEl.value = "";
   poEl.value = "";
   qtyEl.value = 1;
 
-  userLocked = false;
+  sessionLocked = false;
+
   userEl.readOnly = false;
+  poEl.readOnly = false;
+
   userEl.style.opacity = "1";
+  poEl.style.opacity = "1";
 
   stopScanner();
-  showToast("Cleared");
+
+  showToast("Session Cleared");
 }
 
-/* LOCK USER AFTER FIRST SCAN */
-userEl.addEventListener("focus", () => {
-  if(userLocked){
-    userEl.blur();
-    showToast("User locked");
-  }
+/* LOCKED FIELD PROTECTION */
+[userEl, poEl].forEach(el => {
+
+  el.addEventListener("focus", () => {
+
+    if(sessionLocked){
+
+      el.blur();
+
+      showToast("Session locked. Press Clear.");
+
+    }
+
+  });
+
 });
 
-/* KEEP FOCUS */
-setInterval(() => {
-  if(active && document.activeElement !== scanInput){
-    scanInput.focus();
+/* ACTIVATE AFTER PO COMPLETE */
+poEl.addEventListener("blur", activateIfReady);
+
+poEl.addEventListener("keydown", (e) => {
+
+  if(e.key === "Enter"){
+
+    e.preventDefault();
+
+    poEl.blur();
   }
+
+});
+
+function activateIfReady(){
+
+  const user = userEl.value.trim();
+  const po = poEl.value.trim();
+
+  if(user.length >= 2 && po.length >= 2){
+
+    if(!active){
+      startScanner();
+    }
+
+  }
+
+}
+
+/* KEEP SCANNER FOCUSED */
+setInterval(() => {
+
+  if(!active) return;
+
+  const focused = document.activeElement;
+
+  // never steal focus while typing
+  if(
+    focused === userEl ||
+    focused === poEl ||
+    focused === qtyEl
+  ){
+    return;
+  }
+
+  if(focused !== scanInput){
+
+    scanInput.focus();
+
+  }
+
 }, 500);
 
-/* SCAN INPUT */
-scanInput.addEventListener("keydown", (e) => {
+/* SCANNER INPUT */
+scanInput.addEventListener("keydown", async (e) => {
+
   if(!active) return;
 
   if(e.key === "Enter"){
+
     const value = scanInput.value.trim();
+
     scanInput.value = "";
-    if(value) handleScan(value);
-  }
-});
 
-/* HANDLE SCAN */
-async function handleScan(text){
-  if(sending) return;
-  sending = true;
+    if(!value) return;
 
-  try {
+    if(sending) return;
 
-    if(!userLocked){
-      userLocked = true;
-      userEl.readOnly = true;
-      userEl.style.opacity = "0.6";
+    sending = true;
+
+    try{
+
+      showToast("Scanned: " + value);
+
+      await send(value);
+
+    } finally {
+
+      sending = false;
+
     }
 
-    showToast("Scanned: " + text);
-    await send(text);
-
-  } finally {
-    sending = false;
   }
-}
+
+});
 
 /* SEND */
 async function send(itemId){
 
-  const scanId = generateScanId(); // ✅ HYBRID STABLE ID
+  const scanId = generateScanId();
 
   const url =
     API_URL +
@@ -201,23 +332,39 @@ async function send(itemId){
     "&user=" + encodeURIComponent(userEl.value || "");
 
   try {
+
     const r = await fetch(url, {
-      method: "GET",
-      cache: "no-store"
+      method:"GET",
+      cache:"no-store"
     });
 
     const text = await r.text();
-    const d = JSON.parse(text);
 
-    if(d.success){
-      showToast("✔ " + itemId);
-    } else {
-      showToast("⚠ Item not found");
+    let d = {};
+
+    try{
+      d = JSON.parse(text);
+    } catch(err){
+      showToast("Server error");
+      return;
     }
 
-  } catch(e){
+    if(d.success){
+
+      showToast("✔ " + itemId);
+
+    } else {
+
+      showToast("⚠ Item not found");
+
+    }
+
+  } catch(err){
+
     showToast("❌ Network error");
+
   }
+
 }
 </script>
 
